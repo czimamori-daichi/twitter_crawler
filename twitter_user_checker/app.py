@@ -20,8 +20,6 @@ access_token_secret = account['access_token_secret']
 from_queue_name = 'to_check_users'
 to_queue_name = 'to_crawl_followers'
 
-redis_host = 'crawled-users.g80yt7.0001.apne1.cache.amazonaws.com'
-
 def send_users_to_SQS(users, queue_name):
     #Convert from crawling targets to SQS's entries
     entries = []

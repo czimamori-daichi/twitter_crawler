@@ -6,6 +6,8 @@ import twitter
 import random
 import boto3
 import json
+import time
+import threading
 from multiprocessing import Process
 
 accounts = accounts.accounts
@@ -40,23 +42,6 @@ def chunked(iterable, n):
 
 def send_followers(entries):
     to_queue.send_messages(Entries=entries)
-
-def send_users_to_SQS(users, queue_name):
-    #Convert from crawling targets to SQS's entries
-    entries = []
-    for i, user in enumerate(users):
-      message = '{"user_id": %d, "cursor": %d}' % (user['user_id'], user['cursor'])
-      entries.append({"Id": str(i), "MessageBody": message})
-
-    print(entries[0:2])
-
-    #Send crawl result to SQS
-    if entries:
-      queue = boto3.resource('sqs').get_queue_by_name(
-          QueueName = queue_name,
-      )
-      response = queue.send_messages(Entries=entries)
-      print(response)
 
 def lambda_handler(event, context):
 
@@ -121,10 +106,9 @@ def lambda_handler(event, context):
     if len(entries) > 0:
       chunked_entries = chunked(entries, 10)
       for entries in chunked_entries:
-        p = Process(target=send_followers, args=(entries,))
-        p.start()
-      if p:
-        p.join()
+        t = threading.Thread(target=send_followers, args=(entries,))
+        t.setDaemon(True)
+        t.start()
 
     # Save followers on S3
     if len(followers) > 0:
