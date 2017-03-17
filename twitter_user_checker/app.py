@@ -29,7 +29,7 @@ def send_users_to_SQS(users, queue_name):
       message = '{"user_id": %d, "cursor": %d}' % (user['user_id'], user['cursor'])
       entries.append({"Id": str(i), "MessageBody": message})
 
-    print(entries[0:2])
+    print(entries)
 
     #Send crawl result to SQS
     if entries:
@@ -51,7 +51,7 @@ def lambda_handler(event, context):
     from_queue = boto3.resource('sqs').get_queue_by_name(
         QueueName = from_queue_name,
     )
-    messages = from_queue.receive_messages(MaxNumberOfMessages=1)
+    messages = from_queue.receive_messages(MaxNumberOfMessages=10)
     message = messages
     to_check_users = []
     for message in messages:

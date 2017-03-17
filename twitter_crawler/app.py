@@ -30,6 +30,11 @@ from_queue = boto3.resource('sqs').get_queue_by_name(
     QueueName = from_queue_name,
 )
 
+def delete_all_messages(messages):
+  for message in messages:
+    message.delete()
+
+
 def chunked(iterable, n):
   return [iterable[x:x + n] for x in range(0, len(iterable), n)]
 
@@ -67,7 +72,11 @@ def lambda_handler(event, context):
     messages = from_queue.receive_messages(MaxNumberOfMessages=1)
     print('End get users from SQS')
 
+    if len(messages) == 0:
+      print("SQS is empty.")
+      return
     message = messages[0]
+    print(message.body)
     print(json.loads(message.body))
     user_id = json.loads(message.body)['user_id']
     cursor = json.loads(message.body)['cursor']
@@ -89,9 +98,12 @@ def lambda_handler(event, context):
     except Exception as e:
       # Return user_id to SQS
       print('=========')
+      if "Not authorized." in str(e):
+        print("Not authrorized exception")
+        delete_all_messages(messages)
       print(e)
+      print(type(e))
       print('=========')
-      send_users_to_SQS([user], from_queue_name)
       return
 
     #Convert from crawling targets to SQS's entries
@@ -130,8 +142,7 @@ def lambda_handler(event, context):
       )
 
     # Delete all messages got from SQS
-    for message in messages:
-      message.delete()
+    delete_all_messages(messages)
    
     return user_id
 
