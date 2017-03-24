@@ -1,42 +1,41 @@
 from __future__ import print_function
 
-import accounts2 as accounts
+import accounts
 import twitter
 import random
 import boto3
 import json
 import time
 import threading
-from multiprocessing import Process
 
-accounts = accounts.accounts
-account = random.choice(accounts)
+ACCOUNTS = accounts.accounts
+ACCOUNT = random.choice(ACCOUNTS)
 
-consumer_key = account['consumer_key']
-consumer_secret = account['consumer_secret']
-access_token = account['access_token']
-access_token_secret = account['access_token_secret']
+CONSUMER_KEY = ACCOUNT['consumer_key']
+CONSUMER_SECRET = ACCOUNT['consumer_secret']
+ACCESS_TOKEN = ACCOUNT['access_token']
+ACCESS_TOKEN_SECRET = ACCOUNT['access_token_secret']
 
-from_queue_name = 'to_crawl_followers'
-to_queue_name = 'to_check_users'
-s3_bucket_name = 'twitter-crawler'
-s3_dir_name = 'followers'
+FROM_QUEUE_NAME = 'to_crawl_followers'
+TO_QUEUE_NAME = 'to_check_users'
+S3_BUCKET_NAME = 'twitter-crawler'
+S3_DIR_NAME = 'followers'
 
-crawl_size = 100
+CRAWL_SIZE = 100
 
 to_queue = boto3.resource('sqs').get_queue_by_name(
-    QueueName=to_queue_name,
+    QueueName=TO_QUEUE_NAME,
 )
 
 from_queue = boto3.resource('sqs').get_queue_by_name(
-    QueueName=from_queue_name,
+    QueueName=FROM_QUEUE_NAME,
 )
 
 def save_followers_on_s3(user_id, cursor, followers):
     if len(followers) > 0:
       s3 = boto3.resource('s3')
-      bucket = s3.Bucket(s3_bucket_name)
-      s3_object_name = s3_dir_name + "/" + str(user_id) + "/" + str(cursor)
+      bucket = s3.Bucket(S3_BUCKET_NAME)
+      s3_object_name = S3_DIR_NAME + "/" + str(user_id) + "/" + str(cursor)
       obj = bucket.Object(s3_object_name)
 
       s3_body = '\n'.join(map(lambda x: "%d,%d" % (user_id, x), followers))
@@ -67,16 +66,15 @@ def send_followers(entries):
 def lambda_handler(event, context):
 
     api = twitter.Api(
-        consumer_key=consumer_key,
-        consumer_secret=consumer_secret,
-        access_token_key=access_token,
-        access_token_secret=access_token_secret,
+        consumer_key=CONSUMER_KEY,
+        consumer_secret=CONSUMER_SECRET,
+        access_token_key=ACCESS_TOKEN,
+        access_token_secret=ACCESS_TOKEN_SECRET,
     )
 
     # Get users to crawle and cursors from SQS
     print('Start get users from SQS')
     messages = from_queue.receive_messages(MaxNumberOfMessages=1)
-    print('End get users from SQS')
 
     if len(messages) == 0:
       print("SQS is empty.")
@@ -95,7 +93,7 @@ def lambda_handler(event, context):
 
     # Twitter API for crawling followers
     try:
-      response = api.GetFollowerIDsPaged(user_id=user_id, cursor=cursor, count=crawl_size)
+      response = api.GetFollowerIDsPaged(user_id=user_id, cursor=cursor, count=CRAWL_SIZE)
       next_cursor = response[0]
       followers = response[2]
       print("follower size: ")

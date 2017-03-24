@@ -1,24 +1,22 @@
 from __future__ import print_function
 
 import accounts2 as accounts
-# import tweepy
 import twitter
 import boto3
 import json
-import redis
 import random
 from boto3.dynamodb.conditions import Key, Attr
 
-accounts = accounts.accounts
-account = random.choice(accounts)
+ACCOUNTS = accounts.accounts
+ACCOUNT = random.choice(ACCOUNTS)
 
-consumer_key = account['consumer_key']
-consumer_secret = account['consumer_secret']
-access_token = account['access_token']
-access_token_secret = account['access_token_secret']
+CONSUMER_KEY = ACCOUNT['consumer_key']
+CONSUMER_SECRET = ACCOUNT['consumer_secret']
+ACCESS_TOKEN = ACCOUNT['access_token']
+ACCESS_TOKEN_SECRET = ACCOUNT['access_token_secret']
 
-from_queue_name = 'to_check_users'
-to_queue_name = 'to_crawl_followers'
+FROM_QUEUE_NAME = 'to_check_users'
+TO_QUEUE_NAME = 'to_crawl_followers'
 
 def send_users_to_SQS(users, queue_name):
     #Convert from crawling targets to SQS's entries
@@ -39,18 +37,17 @@ def send_users_to_SQS(users, queue_name):
 
 def lambda_handler(event, context):
     api = twitter.Api(
-        consumer_key = consumer_key,
-        consumer_secret = consumer_secret,
-        access_token_key = access_token,
-        access_token_secret = access_token_secret,
+        consumer_key=CONSUMER_KEY,
+        consumer_secret=CONSUMER_SECRET,
+        access_token_key=ACCESS_TOKEN,
+        access_token_secret=ACCESS_TOKEN_SECRET,
     )
 
     # Get users to crawle and cursors from SQS
     from_queue = boto3.resource('sqs').get_queue_by_name(
-        QueueName = from_queue_name,
+        QueueName = FROM_QUEUE_NAME,
     )
     messages = from_queue.receive_messages(MaxNumberOfMessages=10)
-    message = messages
     to_check_users = []
     for message in messages:
       user_id = json.loads(message.body)['user_id']
@@ -73,7 +70,7 @@ def lambda_handler(event, context):
     except Exception as e:
       # Return user_id to SQS
       print(e)
-      send_users_to_SQS(to_check_users, from_queue_name)
+      send_users_to_SQS(to_check_users, FROM_QUEUE_NAME)
       return
     
     # Check duplicated users by DynamoDB
@@ -100,7 +97,7 @@ def lambda_handler(event, context):
         )
 
 
-    send_users_to_SQS(to_check_users, to_queue_name)
+    send_users_to_SQS(to_check_users, TO_QUEUE_NAME)
 
 
     # Delete all messages got from SQS
