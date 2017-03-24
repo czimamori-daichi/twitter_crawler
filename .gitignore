@@ -1,3 +1,4 @@
 account
 *.pyc
 *.zip
+accounts.py

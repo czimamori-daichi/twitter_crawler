@@ -1,7 +1,10 @@
 from __future__ import print_function
 
-import accounts2 as accounts
-import lib.twitter
+import sys
+sys.path.append('./lib')
+
+import accounts
+import twitter
 import boto3
 import json
 import random
