@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import accounts2 as accounts
-# import tweepy
 import twitter
 import random
 import boto3
@@ -23,19 +22,41 @@ to_queue_name = 'to_check_users'
 s3_bucket_name = 'twitter-crawler'
 s3_dir_name = 'followers'
 
+crawl_size = 100
 
 to_queue = boto3.resource('sqs').get_queue_by_name(
-    QueueName = to_queue_name,
+    QueueName=to_queue_name,
 )
 
 from_queue = boto3.resource('sqs').get_queue_by_name(
-    QueueName = from_queue_name,
+    QueueName=from_queue_name,
 )
+
+def save_followers_on_s3(user_id, cursor, followers):
+    if len(followers) > 0:
+      s3 = boto3.resource('s3')
+      bucket = s3.Bucket(s3_bucket_name)
+      s3_object_name = s3_dir_name + "/" + str(user_id) + "/" + str(cursor)
+      obj = bucket.Object(s3_object_name)
+
+      s3_body = '\n'.join(map(lambda x: "%d,%d" % (user_id, x), followers))
+
+      response = obj.put(
+          Body=s3_body,
+          ContentEncoding='utf-8',
+          ContentType='text/plane'
+      )
+
+def convert_followers_to_sqs_entry(targets):
+    entries = []
+    for i, t in enumerate(targets):
+        message = '{"user_id": %d, "cursor": -1}' % t
+        entries.append({"Id": str(i), "MessageBody": message})
+    return entries
 
 def delete_all_messages(messages):
   for message in messages:
     message.delete()
-
 
 def chunked(iterable, n):
   return [iterable[x:x + n] for x in range(0, len(iterable), n)]
@@ -46,10 +67,10 @@ def send_followers(entries):
 def lambda_handler(event, context):
 
     api = twitter.Api(
-        consumer_key = consumer_key,
-        consumer_secret = consumer_secret,
-        access_token_key = access_token,
-        access_token_secret = access_token_secret,
+        consumer_key=consumer_key,
+        consumer_secret=consumer_secret,
+        access_token_key=access_token,
+        access_token_secret=access_token_secret,
     )
 
     # Get users to crawle and cursors from SQS
@@ -74,7 +95,7 @@ def lambda_handler(event, context):
 
     # Twitter API for crawling followers
     try:
-      response = api.GetFollowerIDsPaged(user_id=user_id, cursor=cursor)
+      response = api.GetFollowerIDsPaged(user_id=user_id, cursor=cursor, count=crawl_size)
       next_cursor = response[0]
       followers = response[2]
       print("follower size: ")
@@ -93,37 +114,27 @@ def lambda_handler(event, context):
 
     #Convert from crawling targets to SQS's entries
     targets = followers[:]
-    if next_cursor != 0:
-      targets.append(user_id)
-    entries = []
-    for i, t in enumerate(targets):
-      message = '{"user_id": %d, "cursor": -1}' % t
-      entries.append({"Id": str(i), "MessageBody": message})
+    entries = convert_followers_to_sqs_entry(targets)
 
     print(entries[0:2])
 
     #Send crawl result to SQS
+    if next_cursor != 0:
+      message = '{"user_id": %d, "cursor": %d}' % (user_id, next_cursor)
+      from_queue.send_message(MessageBody=message)
+
     if len(entries) > 0:
       chunked_entries = chunked(entries, 10)
+      threads = []
       for entries in chunked_entries:
         t = threading.Thread(target=send_followers, args=(entries,))
-        t.setDaemon(True)
+        threads.append(t)
         t.start()
+      for t in threads:
+        t.join()
 
     # Save followers on S3
-    if len(followers) > 0:
-      s3 = boto3.resource('s3')
-      bucket = s3.Bucket(s3_bucket_name)
-      s3_object_name = s3_dir_name + "/" + str(user_id) + "/" + str(cursor)
-      obj = bucket.Object(s3_object_name)
-
-      s3_body = '\n'.join(map(lambda x: "%d,%d" % (user_id, x), followers))
-
-      response = obj.put(
-          Body=s3_body,
-          ContentEncoding='utf-8',
-          ContentType='text/plane'
-      )
+    save_followers_on_s3(user_id, cursor, followers)
 
     # Delete all messages got from SQS
     delete_all_messages(messages)
