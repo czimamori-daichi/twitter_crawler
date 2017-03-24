@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import accounts2 as accounts
-import twitter
+import lib.twitter
 import boto3
 import json
 import random

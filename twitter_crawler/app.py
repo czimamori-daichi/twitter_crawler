@@ -1,5 +1,8 @@
 from __future__ import print_function
 
+import sys
+sys.path.append('./lib')
+
 import accounts
 import twitter
 import random
